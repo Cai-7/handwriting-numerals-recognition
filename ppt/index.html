@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>手写数字识别系统 · 深度学习 MNIST</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Noto+Sans+SC:wght@200;300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    --paper: #F8F8F8;
+    --paper-rgb: 248,248,248;
+    --ink: #111111;
+    --ink-rgb: 17,17,17;
+    --accent: #002FA7;
+    --accent-rgb: 0,47,167;
+    --accent-light: #EDF0FF;
+    --accent-rgb-light: 237,240,255;
+    --hairline: #E0E0E0;
+    --hairline-rgb: 224,224,224;
+    --gray: #666666;
+    --gray-light: #999999;
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+    --sp-7: 40px; --sp-8: 48px; --sp-9: 64px; --sp-10: 80px; --sp-11: 96px; --sp-12: 128px;
+    --nav-h: 3vh;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:var(--ink); }
+  body {
+    font-family: 'Inter','Noto Sans SC','Microsoft YaHei UI',sans-serif;
+    font-weight: 300;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #deck {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .slide {
+    flex: 0 0 100vw;
+    width: 100vw;
+    height: 100vh;
+    scroll-snap-align: start;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .slide.light { background: var(--paper); color: var(--ink); }
+  .slide.dark { background: var(--ink); color: var(--paper); }
+  .slide.hero-light { background: var(--paper); color: var(--ink); }
+  .slide.hero-dark { background: var(--ink); color: var(--paper); }
+
+  .slide-inner {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--sp-8) var(--sp-10);
+    position: relative;
+    z-index: 2;
+  }
+
+  canvas#bg-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .slide.light canvas, .slide.hero-light canvas { display: none; }
+
+  /* Typography */
+  .h-hero {
+    font-family: 'Inter','Noto Sans SC','Microsoft YaHei UI',sans-serif;
+    font-weight: 200;
+    font-size: min(6.4vw, 11.2vh);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  .h-hero.accent { color: var(--accent); }
+  .h-hero .accent { color: var(--accent); }
+
+  .h-statement {
+    font-weight: 200;
+    font-size: min(9.6vw, 14vh);
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+  }
+
+  .h-xl {
+    font-weight: 300;
+    font-size: min(3.8vw, 5.5vh);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+
+  .h-md {
+    font-weight: 400;
+    font-size: min(1.8vw, 2.6vh);
+    line-height: 1.3;
+  }
+
+  .t-cat {
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray);
+  }
+
+  .t-meta {
+    font-family: 'Inter', monospace;
+    font-weight: 500;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--gray);
+  }
+
+  .lead {
+    font-weight: 300;
+    font-size: min(1.5vw, 20px);
+    line-height: 1.5;
+    color: var(--gray);
+  }
+
+  .num-mega {
+    font-weight: 200;
+    font-size: min(8vw, 13vh);
+    line-height: 1.0;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .num-mega.accent { color: var(--accent); }
+
+  .mono {
+    font-family: 'Inter', 'Consolas', monospace;
+    font-weight: 400;
+  }
+
+  body.dark-mode .slide.light { background: var(--ink); color: var(--paper); }
+  body.dark-mode .slide.light .t-cat { color: var(--gray-light); }
+  body.dark-mode .slide.light .lead { color: var(--gray-light); }
+
+  /* Components */
+  .accent-bar {
+    width: 48px;
+    height: 3px;
+    background: var(--accent);
+    margin-bottom: var(--sp-5);
+  }
+
+  .accent-block {
+    background: var(--accent);
+    color: var(--paper);
+    padding: var(--sp-2) var(--sp-4);
+    display: inline-block;
+  }
+
+  .hr-hairline {
+    width: 100%;
+    height: 1px;
+    background: rgba(var(--ink-rgb),0.12);
+    margin: var(--sp-4) 0;
+  }
+  .slide.dark .hr-hairline,
+  .slide.hero-dark .hr-hairline {
+    background: rgba(var(--paper-rgb),0.12);
+  }
+
+  .card-accent {
+    background: var(--accent);
+    color: var(--paper);
+    padding: var(--sp-6);
+  }
+  .card-fill {
+    background: rgba(var(--ink-rgb),0.04);
+    padding: var(--sp-6);
+  }
+  .slide.dark .card-fill,
+  .slide.hero-dark .card-fill {
+    background: rgba(var(--paper-rgb),0.06);
+  }
+  .card-outlined {
+    border: 1px solid var(--hairline);
+    padding: var(--sp-6);
+  }
+  .slide.dark .card-outlined,
+  .slide.hero-dark .card-outlined {
+    border-color: rgba(var(--paper-rgb),0.15);
+  }
+
+  .dots {
+    display: grid;
+    grid-template-columns: repeat(8, 8px);
+    grid-template-rows: repeat(8, 8px);
+    gap: 8px;
+    opacity: 0.12;
+  }
+  .dots span {
+    width: 8px; height: 8px;
+    background: var(--ink);
+  }
+  .slide.dark .dots span,
+  .slide.hero-dark .dots span {
+    background: var(--paper);
+  }
+
+  /* Grid system */
+  .grid-12 { display:grid; grid-template-columns:repeat(12,1fr); gap:var(--sp-5); }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-5); }
+  .grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:var(--sp-5); }
+  .grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:var(--sp-5); }
+
+  .span-12 { grid-column:span 12; }
+  .span-8 { grid-column:span 8; }
+  .span-7 { grid-column:span 7; }
+  .span-6 { grid-column:span 6; }
+  .span-5 { grid-column:span 5; }
+  .span-4 { grid-column:span 4; }
+  .span-3 { grid-column:span 3; }
+  .span-2 { grid-column:span 2; }
+
+  /* Nav */
+  #nav {
+    position: fixed;
+    bottom: var(--sp-3);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--sp-2);
+    z-index: 100;
+  }
+  #nav .dot {
+    width: 8px; height: 8px;
+    background: rgba(var(--ink-rgb),0.25);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #nav .dot.active { background: var(--accent); width: 24px; }
+
+  .slide.hero-dark ~ #nav .dot { background: rgba(var(--paper-rgb),0.3); }
+
+  #nav-hint {
+    position: fixed;
+    bottom: var(--sp-7);
+    right: var(--sp-6);
+    font-size: 12px;
+    color: var(--gray);
+    z-index: 100;
+    font-family: 'Inter', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  @media (max-width: 768px) {
+    .h-hero { font-size: min(9vw, 6vh); }
+    .h-statement { font-size: min(12vw, 8vh); }
+    .h-xl { font-size: min(5vw, 3.5vh); }
+    .h-md { font-size: min(2.5vw, 2vh); }
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-4 { grid-template-columns: repeat(2,1fr); }
+    .grid-12 { grid-template-columns: repeat(6,1fr); }
+  }
+
+  .fit-fade { opacity: 0; transform: translateY(24px); transition: all 0.6s cubic-bezier(0.22,1,0.36,1); }
+  .fit-fade.visible { opacity: 1; transform: translateY(0); }
+  .fit-scale { opacity: 0; transform: scale(0.92); transition: all 0.7s cubic-bezier(0.22,1,0.36,1); }
+  .fit-scale.visible { opacity: 1; transform: scale(1); }
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+<!-- ==================== SLIDE 1 · COVER ==================== -->
+<section class="slide hero-dark" data-layout="SWISS-COVER" id="s1">
+  <canvas id="bg-canvas-s1" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
+  <div class="slide-inner" style="display:flex;align-items:center;justify-content:space-between;min-height:100%">
+    <div style="flex:1;z-index:2">
+      <div class="t-meta fit-fade" style="color:rgba(255,255,255,0.4)">PROJECT · 2026</div>
+      <div style="height:var(--sp-3)"></div>
+      <h1 class="h-hero fit-fade" style="color:var(--paper); animation-delay:0.1s; max-width:10ch;">
+        手写数字<br>识别系统
+      </h1>
+      <div style="height:var(--sp-5)"></div>
+      <p class="lead fit-fade" style="color:rgba(255,255,255,0.5); animation-delay:0.2s; max-width:36ch;">
+        基于 PyTorch 卷积神经网络的<br>端到端深度学习解决方案
+      </p>
+      <div style="height:var(--sp-6)"></div>
+      <div class="fit-fade" style="animation-delay:0.3s">
+        <span class="accent-block" style="font-size:14px;font-weight:500;letter-spacing:0.06em;">MNIST · CNN · BATCHNORM</span>
+      </div>
+      <div style="margin-top:var(--sp-8)">
+        <div class="accent-bar fit-fade" style="animation-delay:0.4s"></div>
+      </div>
+    </div>
+    <div style="flex:0 0 320px;z-index:2;opacity:0.6">
+      <div class="dots" style="grid-template-columns:repeat(16,8px);grid-template-rows:repeat(16,8px);gap:10px;opacity:0.15;">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 2 · SYSTEM ARCHITECTURE ==================== -->
+<section class="slide light" data-layout="S04" id="s2">
+  <div class="slide-inner">
+    <div style="display:flex;align-items:flex-end;gap:var(--sp-5);margin-bottom:var(--sp-8)">
+      <h2 class="h-xl fit-fade" style="font-weight:300;margin:0">系统架构</h2>
+      <span class="t-cat fit-fade" style="animation-delay:0.1s;margin-bottom:4px">SIMPLE · YET POWERFUL</span>
+    </div>
+
+    <div class="grid-3" style="margin-top:var(--sp-5)">
+      <!-- Card 1: Model -->
+      <div class="card-fill fit-fade" style="animation-delay:0.15s">
+        <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)">
+          <i data-lucide="cpu" style="width:24px;height:24px;stroke:var(--accent);stroke-width:1.5"></i>
+          <span class="t-cat" style="margin:0">模型定义</span>
+        </div>
+        <h3 class="h-md" style="margin-bottom:var(--sp-3);font-weight:400">SimpleNet · CNN</h3>
+        <div class="hr-hairline"></div>
+        <div style="font-size:15px;line-height:1.7;color:var(--gray);margin-top:var(--sp-4)">
+          Conv2d <b style="color:var(--ink);font-weight:500">(1→32→64)</b><br>
+          BatchNorm + ReLU<br>
+          MaxPool 2×2 下采样<br>
+          FC 12544→128→10<br>
+          Dropout 0.5 正则化
+        </div>
+      </div>
+
+      <!-- Card 2: Training -->
+      <div class="card-fill fit-fade" style="animation-delay:0.25s">
+        <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)">
+          <i data-lucide="flame" style="width:24px;height:24px;stroke:var(--accent);stroke-width:1.5"></i>
+          <span class="t-cat" style="margin:0">训练管线</span>
+        </div>
+        <h3 class="h-md" style="margin-bottom:var(--sp-3);font-weight:400">训练流程</h3>
+        <div class="hr-hairline"></div>
+        <div style="font-size:15px;line-height:1.7;color:var(--gray);margin-top:var(--sp-4)">
+          MNIST 60k 训练样本<br>
+          Adam · lr=0.001<br>
+          ReduceLROnPlateau<br>
+          Data Augmentation<br>
+          10 Epochs 收敛
+        </div>
+      </div>
+
+      <!-- Card 3: Inference -->
+      <div class="card-fill fit-fade" style="animation-delay:0.35s">
+        <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)">
+          <i data-lucide="zap" style="width:24px;height:24px;stroke:var(--accent);stroke-width:1.5"></i>
+          <span class="t-cat" style="margin:0">推理部署</span>
+        </div>
+        <h3 class="h-md" style="margin-bottom:var(--sp-3);font-weight:400">推理与部署</h3>
+        <div class="hr-hairline"></div>
+        <div style="font-size:15px;line-height:1.7;color:var(--gray);margin-top:var(--sp-4)">
+          预处理流水线<br>
+          GPU/CUDA 加速<br>
+          Tkinter GUI 界面<br>
+          mnist_net.pth<br>
+          毫秒级响应
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline bar -->
+    <div style="margin-top:var(--sp-9);display:flex;align-items:center;gap:0;justify-content:center">
+      <div class="fit-fade" style="animation-delay:0.5s">
+        <span style="display:inline-block;padding:var(--sp-2) var(--sp-4);background:var(--ink);color:var(--paper);font-size:13px;font-weight:500;letter-spacing:0.05em;">图像输入</span>
+      </div>
+      <span style="font-size:18px;color:var(--gray);margin:0 var(--sp-4);font-weight:200">→</span>
+      <span style="font-size:13px;font-weight:500;letter-spacing:0.05em">灰度化</span>
+      <span style="font-size:18px;color:var(--gray);margin:0 var(--sp-4);font-weight:200">→</span>
+      <span style="font-size:13px;font-weight:500;letter-spacing:0.05em">归一化</span>
+      <span style="font-size:18px;color:var(--gray);margin:0 var(--sp-4);font-weight:200">→</span>
+      <span style="font-size:13px;font-weight:500;letter-spacing:0.05em">模型推理</span>
+      <span style="font-size:18px;color:var(--gray);margin:0 var(--sp-4);font-weight:200">→</span>
+      <span style="display:inline-block;padding:var(--sp-2) var(--sp-4);background:var(--accent);color:var(--paper);font-size:13px;font-weight:500;letter-spacing:0.05em;">数字输出</span>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 3 · RESULTS & CLOSING ==================== -->
+<section class="slide hero-dark" data-layout="SWISS-CLOSING" id="s3">
+  <canvas id="bg-canvas-s3" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
+  <div class="slide-inner" style="z-index:2">
+    <!-- KPI Tower -->
+    <div style="margin-bottom:var(--sp-8)">
+      <div class="t-meta fit-fade" style="color:rgba(255,255,255,0.4)">PERFORMANCE · METRICS</div>
+      <div style="height:var(--sp-4)"></div>
+      <div class="grid-4">
+        <div class="fit-fade" style="animation-delay:0.1s">
+          <div class="num-mega accent">99</div>
+          <div style="font-size:18px;font-weight:300;color:rgba(255,255,255,0.7);margin-top:var(--sp-3)">测试准确率 %</div>
+          <div style="font-size:14px;color:rgba(255,255,255,0.4);margin-top:var(--sp-2)">10000 张全新图片</div>
+        </div>
+        <div class="fit-fade" style="animation-delay:0.2s">
+          <div class="num-mega accent">&lt;5</div>
+          <div style="font-size:18px;font-weight:300;color:rgba(255,255,255,0.7);margin-top:var(--sp-3)">单图推理 ms</div>
+          <div style="font-size:14px;color:rgba(255,255,255,0.4);margin-top:var(--sp-2)">GPU CUDA 加速</div>
+        </div>
+        <div class="fit-fade" style="animation-delay:0.3s">
+          <div class="num-mega accent">10</div>
+          <div style="font-size:18px;font-weight:300;color:rgba(255,255,255,0.7);margin-top:var(--sp-3)">Epochs</div>
+          <div style="font-size:14px;color:rgba(255,255,255,0.4);margin-top:var(--sp-2)">快速收敛</div>
+        </div>
+        <div class="fit-fade" style="animation-delay:0.4s">
+          <div class="num-mega accent">125K</div>
+          <div style="font-size:18px;font-weight:300;color:rgba(255,255,255,0.7);margin-top:var(--sp-3)">参数量</div>
+          <div style="font-size:14px;color:rgba(255,255,255,0.4);margin-top:var(--sp-2)">轻量高效</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hr-hairline fit-fade" style="animation-delay:0.5s;background:rgba(255,255,255,0.1)"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:var(--sp-8)">
+      <div class="fit-fade" style="animation-delay:0.6s">
+        <h2 class="h-xl" style="font-weight:200;color:rgba(255,255,255,0.9);max-width:18ch">
+          从数据到模型<br>从训练到部署
+        </h2>
+        <p class="lead" style="color:rgba(255,255,255,0.4);margin-top:var(--sp-4);max-width:30ch">
+          端到端深度学习 · 完整项目管线 · 即插即用
+        </p>
+      </div>
+      <div class="fit-fade" style="animation-delay:0.7s">
+        <div style="display:flex;gap:var(--sp-5);align-items:center">
+          <div class="accent-block" style="font-size:12px;letter-spacing:0.08em;font-weight:500">READY</div>
+          <div style="font-size:14px;color:rgba(255,255,255,0.4);font-weight:300;letter-spacing:0.05em">PREDICT · GUI · DEPLOY</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:absolute;bottom:var(--sp-10);right:var(--sp-10);opacity:0.06">
+      <div class="dots" style="grid-template-columns:repeat(12,8px);grid-template-rows:repeat(12,8px);gap:10px">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<nav id="nav">
+  <div class="dot active" onclick="goSlide(0)"></div>
+  <div class="dot" onclick="goSlide(1)"></div>
+  <div class="dot" onclick="goSlide(2)"></div>
+</nav>
+<div id="nav-hint">← → 翻页 &nbsp; ESC 全景</div>
+
+<script>
+(function(){
+  // WebGL background for hero dark pages
+  function initCanvas(canvasId) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    var vert = 'attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}';
+    var frag = `
+      precision highp float;
+      uniform vec2 r;
+      uniform float t;
+      void main(){
+        vec2 uv=gl_FragCoord.xy/r;
+        vec2 c=uv-0.5;
+        float d=length(c)*3.0;
+        float n=sin(d*8.0-t)*cos(c.x*6.0+t*0.4)*sin(c.y*6.0-t*0.3);
+        n+=sin(c.x*12.0+t*0.5)*cos(c.y*10.0-t*0.2)*0.3;
+        n+=sin((c.x+c.y)*14.0-t*0.6)*0.2;
+        float f=step(0.0,n)*0.03+0.01;
+        vec3 col=mix(vec3(0.0,0.09,0.41),vec3(0.0,0.06,0.28),1.0-d*0.5);
+        gl_FragColor=vec4(col*f,1.0);
+      }`;
+    function shader(type,src){
+      var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;
+    }
+    var pr=gl.createProgram();
+    gl.attachShader(pr,shader(35633,vert));
+    gl.attachShader(pr,shader(35632,frag));
+    gl.linkProgram(pr);gl.useProgram(pr);
+
+    var buf=gl.createBuffer();
+    gl.bindBuffer(34962,buf);
+    gl.bufferData(34962,new Float32Array([-1,-1,1,-1,-1,1,1,1]),35044);
+
+    var pos=gl.getAttribLocation(pr,'p');
+    gl.enableVertexAttribArray(pos);
+    gl.vertexAttribPointer(pos,2,5126,false,0,0);
+
+    var uR=gl.getUniformLocation(pr,'r');
+    var uT=gl.getUniformLocation(pr,'t');
+    gl.uniform2f(uR,canvas.width,canvas.height);
+
+    var start=performance.now();
+    function loop(){
+      gl.uniform1f(uT,(performance.now()-start)*0.001);
+      gl.drawArrays(5,0,4);
+      requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  initCanvas('bg-canvas-s1');
+  initCanvas('bg-canvas-s3');
+
+  // Navigation
+  var deck = document.getElementById('deck');
+  var dots = document.querySelectorAll('#nav .dot');
+  var currentSlide = 0;
+  var totalSlides = document.querySelectorAll('.slide').length;
+
+  function goSlide(n) {
+    currentSlide = Math.max(0, Math.min(n, totalSlides - 1));
+    deck.scrollTo({ left: currentSlide * window.innerWidth, behavior: 'smooth' });
+  }
+
+  var scrollTimer;
+  deck.addEventListener('scroll', function() {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function() {
+      currentSlide = Math.round(deck.scrollLeft / window.innerWidth);
+      dots.forEach(function(d, i) {
+        d.classList.toggle('active', i === currentSlide);
+      });
+    }, 50);
+  });
+
+  window.goSlide = goSlide;
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); goSlide(currentSlide + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goSlide(currentSlide - 1); }
+    if (e.key === 'Escape') {
+      var overlay = document.getElementById('overview');
+      if (overlay) { overlay.remove(); }
+      else {
+        var ov = document.createElement('div');
+        ov.id = 'overview';
+        ov.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:200;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:3vw;padding:4vw;cursor:pointer';
+        document.querySelectorAll('.slide').forEach(function(s, i) {
+          var thumb = s.cloneNode(true);
+          thumb.style.cssText = 'flex:0 0 28vw;height:16vw;border:1px solid rgba(255,255,255,0.15);overflow:hidden;position:relative;pointer-events:none;transform:scale(0.7)';
+          thumb.querySelectorAll('*').forEach(function(el) { el.style.animation = 'none'; el.style.transition = 'none'; });
+          thumb.onclick = function() { ov.remove(); goSlide(i); };
+          ov.appendChild(thumb);
+        });
+        document.body.appendChild(ov);
+        ov.onclick = function() { ov.remove(); };
+      }
+    }
+  });
+
+  // Touch swipe
+  var touchStartX = 0;
+  deck.addEventListener('touchstart', function(e) { touchStartX = e.touches[0].clientX; });
+  deck.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) goSlide(currentSlide + (dx < 0 ? 1 : -1));
+  });
+
+  // Mouse wheel
+  var wheelTimer;
+  deck.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(function() {
+      goSlide(currentSlide + (e.deltaY > 0 ? 1 : -1));
+    }, 80);
+  }, { passive: false });
+
+  // Entrance animations
+  var animatedElements = document.querySelectorAll('.fit-fade, .fit-scale');
+  function revealElements() {
+    animatedElements.forEach(function(el) {
+      var rect = el.getBoundingClientRect();
+      if (rect.left < window.innerWidth && rect.right > 0) {
+        el.style.animationDelay = el.style.animationDelay || '0s';
+        el.classList.add('visible');
+      }
+    });
+  }
+  deck.addEventListener('scroll', revealElements);
+  revealElements();
+
+  // Lucide icons
+  lucide.createIcons();
+})();
+</script>
+
+</body>
+</html>
